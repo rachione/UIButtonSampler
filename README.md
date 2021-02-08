@@ -1,3 +1,3 @@
 ## About
-It can crop UI buttons by clicking using OpenCV.
+It can crop buttons from the interface using OpenCV.
 
