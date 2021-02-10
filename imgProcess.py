@@ -4,7 +4,6 @@ import numpy as np
 
 
 class TrackbarDebug:
-
     def updateMin(self, x):
         self.min = x
 
@@ -41,7 +40,6 @@ class TrackbarDebug:
 
 
 class ImgProcess:
-
     def __init__(self):
         self.debug = TrackbarDebug()
 

@@ -1,5 +1,8 @@
 import cv2
 import numpy as np
+import sys
+from pathlib import Path
+sys.path.insert(0, '..')
 from imgProcess import TrackbarDebug
 
 
@@ -14,9 +17,9 @@ def getContours(dilate, origin):
         if h > 30 and w > 50 and w < 500 and w * h < 50000:
             areas.append((x, y, w, h))
             cv2.rectangle(origin, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    cv2.imshow('origin', origin)
-    cv2.imshow('dilate', dilate)
-    cv2.waitKey(0)
+    # cv2.imshow('origin', origin)
+    # cv2.imshow('dilate', dilate)
+    # cv2.waitKey(0)
 
 
 def getAverageColor(img, x, y, range):
@@ -52,12 +55,17 @@ def getSegmentColor(img):
     return res
 
 
-origin = cv2.imread('testIImg/s3.jpg')
+def removeWords(self, img):
+    img = getThresholdOtsu(img)
+
+
+origin = cv2.imread('testImg/s1.jpg')
 # img = cv2.cvtColor(origin, cv2.COLOR_BGR2GRAY)
 # img = TrackbarDebug().imshow(
 #     114, 255,
 #     (lambda min, max: cv2.threshold(img, min, max, cv2.THRESH_BINARY)))
 # img = cv2.cvtColor(origin, cv2.COLOR_BGR2HSV)
+
 img = getSegmentColor(origin)
 
 # blur = cv2.GaussianBlur(img, (3, 3), 3, 0)
