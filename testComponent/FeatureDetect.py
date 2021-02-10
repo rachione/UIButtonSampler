@@ -1,7 +1,7 @@
 import cv2
 
-img1 = cv2.imread('testIImg/base/s1.jpg')
-img2 = cv2.imread('testIImg/a1.jpg')
+img1 = cv2.imread('testImg/s1.jpg')
+img2 = cv2.imread('testImg/s1.jpg')
 
 orb = cv2.ORB_create(nfeatures=1000)
 
