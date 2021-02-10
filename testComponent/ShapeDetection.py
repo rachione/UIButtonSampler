@@ -14,12 +14,12 @@ def isGoodRect(rect):
 
 
 def removeContains(rects):
-    for i, rect1 in enumerate(rects):
+    for rect1 in rects[:]:
         x1, y1, w1, h1 = rect1
-        for j, rect2 in enumerate(rects):
-            if i == j:
-                continue
+        for rect2 in rects[:]:
             x2, y2, w2, h2 = rect2
+            if rect1 == rect2:
+                continue
             if (x2 + w2) >= (x1 + w1)\
                     and x2 <= x1\
                     and y2 <= y1\
