@@ -80,9 +80,9 @@ class ImgProcess:
         G = img[..., 1].astype(np.float32)
         B = img[..., 2].astype(np.float32)
         # Euclidean distance
-        sq_dist = (R - avgColor[0]) ** 2 + \
-            (G - avgColor[1]) ** 2 + (B - avgColor[2]) ** 2
-        mask = sq_dist < (max_dist**2)
+        dist = (R - avgColor[0])**2 + (G - avgColor[1])**2 +\
+         (B -avgColor[2])**2
+        mask = dist < (max_dist**2)
         # mask = [[False,False ...]]
         # mask[..., None] = [[[False],[False]]]
         # repeat,3,axis=2 = [[[False,False,False],[False,False,False]]]
