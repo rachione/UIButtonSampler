@@ -8,10 +8,11 @@ pytesseract.pytesseract.tesseract_cmd = r"D:\exe\Tesseract-OCR\tesseract.exe"
 
 class Rect(Enum):
     WORD = 1
-    PANEL = 2
+    BUTTON = 2
 
 
 class TrackbarDebug:
+
     def updateMin(self, x):
         self.min = x
 
@@ -48,6 +49,7 @@ class TrackbarDebug:
 
 
 class RectModule:
+
     def __init__(self):
         self.debug = TrackbarDebug()
 
@@ -55,13 +57,13 @@ class RectModule:
         x, y, w, h = rect
         return {
             Rect.WORD: (h > 15 and w > 5 and w < 150 and h < 150),
-            Rect.PANEL: (h > 20 and w > 30 and w < 300 and h < 300),
+            Rect.BUTTON: (h > 20 and w > 30 and w < 300 and h < 300),
         }[type]
 
     def sort(self, rects):
         return sorted(rects, key=lambda rect: rect[2] * rect[3])
 
-    #remove contained and overlapped rects
+    # remove contained and overlapped rects
     def removeBadRects(self, rects):
         rects = self.sort(rects)
         for rect1 in rects[:]:
@@ -71,15 +73,15 @@ class RectModule:
                 if rect1 == rect2:
                     continue
 
-                isContain=(x2 + w2) >= (x1 + w1)\
-                        and x2 <= x1\
-                        and y2 <= y1\
-                        and (y2 + h2) >= (y1 + h1)
+                isContain = (x2 + w2) >= (x1 + w1)\
+                    and x2 <= x1\
+                    and y2 <= y1\
+                    and (y2 + h2) >= (y1 + h1)
 
-                isOverlap= not((x1>=(x2 + w2))\
-                        or ((x1+w1)<=x2)\
-                        or (y1>=(y2+h2))\
-                        or ((y1+h1)<=y2))
+                isOverlap = not((x1 >= (x2 + w2))
+                                or ((x1 + w1) <= x2)
+                                or (y1 >= (y2 + h2))
+                                or ((y1 + h1) <= y2))
                 if isContain or isOverlap:
                     rects.remove(rect1)
                     break
@@ -90,19 +92,31 @@ class RectModule:
         imgH, imgW, _ = img.shape
         for i in range(len(rects)):
             x, y, w, h = rects[i]
-            rects[i] = max(0, x - 3), max(0,y - 3),\
-                        min(imgW,w + 6), min(imgH, h + 6)
+            rects[i] = max(0, x - 3), max(0, y - 3),\
+                min(imgW, w + 6), min(imgH, h + 6)
 
         return rects
 
-    def getGoodRect(self, cnts, rectType):
+    def getGoodRects(self, img, rectType):
+        cnts, _ = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         rects = [cv2.boundingRect(cnt) for cnt in cnts]
         rects = [rect for rect in rects if self.isGoodRange(rect, rectType)]
         rects = self.removeBadRects(rects)
         return rects
 
+    def getRectHasPoint(self, rects, pos):
+        bestRect = rects[0]
+        for rect in rects:
+            x, y, w, h = rect
+            if pos.x >= x and pos.x <= x + w and pos.y >= y and pos.y <= y + h:
+                bestRect = rect
+                break
+
+        return bestRect
+
 
 class ImgProcess:
+
     def __init__(self):
         self.debug = TrackbarDebug()
         self.rectModule = RectModule()
@@ -145,7 +159,7 @@ class ImgProcess:
         B = img[..., 2].astype(np.float32)
         # Euclidean distance
         dist = (R - avgColor[0])**2 + (G - avgColor[1])**2 +\
-         (B -avgColor[2])**2
+            (B - avgColor[2])**2
         mask = dist < (max_dist**2)
         # mask = [[False,False ...]]
         # mask[..., None] = [[[False],[False]]]
@@ -161,9 +175,7 @@ class ImgProcess:
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
         dilate = cv2.dilate(edge, kernel, iterations=4)
 
-        cnts, _ = cv2.findContours(dilate, cv2.RETR_TREE,
-                                   cv2.CHAIN_APPROX_SIMPLE)
-        rects = self.rectModule.getGoodRect(cnts, Rect.WORD)
+        rects = self.rectModule.getGoodRects(dilate, Rect.WORD)
         mask = np.zeros([img.shape[0], img.shape[1]], dtype=np.uint8)
         for rect in rects:
             x, y, w, h = rect
@@ -196,31 +208,21 @@ class ImgProcess:
 
         return goodRects
 
-    def getBestRect(self, rects, pos):
-        bestRect = rects[0]
-        for rect in rects:
-            x, y, w, h = rect
-            if pos.x >= x and pos.x <= x + w and pos.y >= y and pos.y <= y + h:
-                bestRect = rect
-                break
-
-        return bestRect
-
     def getUIContour(self, origin, pos):
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-        wordMask = self.wordDetect.getWordMask(origin)
+        wordMask = self.getWordMask(origin)
         colorThresh = self.getColorThreshold(origin, pos)
         mergeThresh = cv2.add(wordMask, colorThresh)
         mergeThresh_inv = cv2.bitwise_not(mergeThresh)
-
         resThresh = cv2.dilate(mergeThresh_inv, kernel, iterations=3)
 
         # edge = self.debug.imshow(
         #     40, 150, (lambda min, max: cv2.Canny(colorThresh, min, max)))
         # edge = cv2.Canny(resThresh, 40, 150)
         # dilate = cv2.dilate(edge, kernel, iterations=3)
-        rects = self.getRects(resThresh, origin)
-        rect = self.getBestRect(rects, pos)
+
+        rects = self.rectModule.getGoodRects(resThresh, Rect.BUTTON)
+        rect = self.rectModule.getRectHasPoint(rects, pos)
 
         area = np.copy(origin)
         for r in rects:
