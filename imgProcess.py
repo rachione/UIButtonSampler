@@ -11,8 +11,25 @@ class Rect(Enum):
     BUTTON = 2
 
 
-class TrackbarDebug:
+class Math:
+    @staticmethod
+    def getAngle(p0, p1, p2):
+        d1, d2 = (p0 - p1).astype('float'), (p2 - p1).astype('float')
+        cosAngle = np.dot(d1, d2) / (np.linalg.norm(d1) * np.linalg.norm(d2))
+        angle = np.arccos(cosAngle)
+        return np.degrees(angle)
 
+    @staticmethod
+    def isGoodQuad(cnt, limitAngle):
+        cnt = cnt.reshape(-1, 2)
+        maxAngle = np.max([
+            Math.getAngle(cnt[i], cnt[(i + 1) % 4], cnt[(i + 2) % 4])
+            for i in range(4)
+        ])
+        return maxAngle <= limitAngle
+
+
+class TrackbarDebug:
     def updateMin(self, x):
         self.min = x
 
@@ -49,7 +66,6 @@ class TrackbarDebug:
 
 
 class RectModule:
-
     def __init__(self):
         self.debug = TrackbarDebug()
 
@@ -78,11 +94,9 @@ class RectModule:
                     and y2 <= y1\
                     and (y2 + h2) >= (y1 + h1)
 
-                isOverlap = not((x1 >= (x2 + w2))
-                                or ((x1 + w1) <= x2)
-                                or (y1 >= (y2 + h2))
-                                or ((y1 + h1) <= y2))
-                if isContain or isOverlap:
+                isOverlap = not ((x1 >= (x2 + w2)) or ((x1 + w1) <= x2) or
+                                 (y1 >= (y2 + h2)) or ((y1 + h1) <= y2))
+                if isContain:
                     rects.remove(rect1)
                     break
 
@@ -97,12 +111,15 @@ class RectModule:
 
         return rects
 
-    def getGoodRects(self, img, rectType):
-        cnts, _ = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    def getGoodRects(self, cnts):
         rects = [cv2.boundingRect(cnt) for cnt in cnts]
-        rects = [rect for rect in rects if self.isGoodRange(rect, rectType)]
         rects = self.removeBadRects(rects)
         return rects
+
+    def isRectHasPoint(self, rect, pos):
+        x, y, w, h = rect
+        return (pos.x >= x and pos.x <= x + w and pos.y >= y
+                and pos.y <= y + h)
 
     def getRectHasPoint(self, rects, pos):
         bestRect = rects[0]
@@ -116,7 +133,6 @@ class RectModule:
 
 
 class ImgProcess:
-
     def __init__(self):
         self.debug = TrackbarDebug()
         self.rectModule = RectModule()
@@ -169,20 +185,6 @@ class ImgProcess:
 
         return res
 
-    def getWordMask(self, img):
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        edge = cv2.Canny(gray, 280, 500)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-        dilate = cv2.dilate(edge, kernel, iterations=4)
-
-        rects = self.rectModule.getGoodRects(dilate, Rect.WORD)
-        mask = np.zeros([img.shape[0], img.shape[1]], dtype=np.uint8)
-        for rect in rects:
-            x, y, w, h = rect
-            cv2.rectangle(mask, (x, y), (x + w, y + h), (255, 255, 255), -1)
-
-        return mask
-
     def getThresholdOtsu(self, img):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, res = cv2.threshold(img, 0, 255,
@@ -193,35 +195,44 @@ class ImgProcess:
         x, y, w, h = rect
         return img[y:y + h, x:x + w]
 
-    def getRects(self, dilate, origin):
-        # area = np.copy(origin)
-        cnts, _ = cv2.findContours(dilate, cv2.RETR_TREE,
-                                   cv2.CHAIN_APPROX_SIMPLE)
-        cnts = sorted(cnts, key=lambda x: cv2.contourArea(x), reverse=True)
-        goodRects = []
+    def findSquares(self, src, pos, type):
+        resCnts = []
+        cnts, _ = cv2.findContours(src, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         for cnt in cnts:
             peri = cv2.arcLength(cnt, True)
             cnt = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-            x, y, w, h = cv2.boundingRect(cnt)
-            if h > 20 and w > 30 and w < 300 and h < 300:
-                goodRects.append((x, y, w, h))
+            rect = cv2.boundingRect(cnt)
+            if  len(cnt) == 4 and\
+                cv2.isContourConvex(cnt) and\
+                self.rectModule.isGoodRange(rect, type) and\
+                self.rectModule.isRectHasPoint(rect,pos) and \
+                Math.isGoodQuad(cnt,100):
+                resCnts.append(cnt)
 
-        return goodRects
+        return resCnts
+
+    def findSquares_BruteForce(self, src, pos, type):
+        resCnts = []
+        for i, channel in enumerate(cv2.split(src)):
+            for thresh1 in range(0, 301, 100):
+                for thresh2 in range(100, 301, 100):
+                    edge = cv2.Canny(channel, thresh1, thresh2)
+
+                    resCnts += self.findSquares(edge, pos, type)
+                    dilate = cv2.dilate(edge, None)
+
+                    cv2.imwrite(
+                        'variant/edge-%d-%d-%d.jpg' % (i, thresh1, thresh2),
+                        edge)
+                    cv2.imwrite(
+                        'variant/dilate-%d-%d-%d.jpg' % (i, thresh1, thresh2),
+                        dilate)
+                    resCnts += self.findSquares(dilate, pos, type)
+        return resCnts
 
     def getUIContour(self, origin, pos):
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-        wordMask = self.getWordMask(origin)
-        colorThresh = self.getColorThreshold(origin, pos)
-        mergeThresh = cv2.add(wordMask, colorThresh)
-        mergeThresh_inv = cv2.bitwise_not(mergeThresh)
-        resThresh = cv2.dilate(mergeThresh_inv, kernel, iterations=3)
-
-        # edge = self.debug.imshow(
-        #     40, 150, (lambda min, max: cv2.Canny(colorThresh, min, max)))
-        # edge = cv2.Canny(resThresh, 40, 150)
-        # dilate = cv2.dilate(edge, kernel, iterations=3)
-
-        rects = self.rectModule.getGoodRects(resThresh, Rect.BUTTON)
+        cnts = self.findSquares_BruteForce(origin, pos, Rect.BUTTON)
+        rects = self.rectModule.getGoodRects(cnts)
         rect = self.rectModule.getRectHasPoint(rects, pos)
 
         area = np.copy(origin)
@@ -229,10 +240,6 @@ class ImgProcess:
             x, y, w, h = r
             cv2.rectangle(area, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-        cv2.imshow('wordMask', wordMask)
-        cv2.imshow('colorThresh', colorThresh)
-        cv2.imshow('mergeThresh_inv', mergeThresh_inv)
-        cv2.imshow('resThresh', resThresh)
         cv2.imshow('area', area)
         cv2.waitKey(0)
 
