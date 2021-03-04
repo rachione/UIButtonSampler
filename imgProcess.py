@@ -12,6 +12,7 @@ class Rect(Enum):
 
 
 class Math:
+
     @staticmethod
     def getAngle(p0, p1, p2):
         d1, d2 = (p0 - p1).astype('float'), (p2 - p1).astype('float')
@@ -30,6 +31,7 @@ class Math:
 
 
 class TrackbarDebug:
+
     def updateMin(self, x):
         self.min = x
 
@@ -66,6 +68,7 @@ class TrackbarDebug:
 
 
 class RectModule:
+
     def __init__(self):
         self.debug = TrackbarDebug()
 
@@ -111,8 +114,10 @@ class RectModule:
 
         return rects
 
-    def getGoodRects(self, cnts):
-        rects = [cv2.boundingRect(cnt) for cnt in cnts]
+    def getRects(self, cnts):
+        return [cv2.boundingRect(cnt) for cnt in cnts]
+
+    def getGoodRects(self, rects):
         rects = self.removeBadRects(rects)
         return rects
 
@@ -133,6 +138,7 @@ class RectModule:
 
 
 class ImgProcess:
+
     def __init__(self):
         self.debug = TrackbarDebug()
         self.rectModule = RectModule()
@@ -195,7 +201,12 @@ class ImgProcess:
         x, y, w, h = rect
         return img[y:y + h, x:x + w]
 
-    def findSquares(self, src, pos, type):
+    def getCropImgByPos(self, img, pos):
+        range = 300
+        rect = pos.x - range // 2, pos.y - range // 2, range, range
+        return (rect[0], rect[1]), self.getCropImg(img, rect)
+
+    def findSquares(self, src, type):
         resCnts = []
         cnts, _ = cv2.findContours(src, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         for cnt in cnts:
@@ -203,44 +214,49 @@ class ImgProcess:
             cnt = cv2.approxPolyDP(cnt, 0.02 * peri, True)
             rect = cv2.boundingRect(cnt)
             if  len(cnt) == 4 and\
-                cv2.isContourConvex(cnt) and\
-                self.rectModule.isGoodRange(rect, type) and\
-                self.rectModule.isRectHasPoint(rect,pos) and \
-                Math.isGoodQuad(cnt,100):
+                    cv2.isContourConvex(cnt) and\
+                    self.rectModule.isGoodRange(rect, type) and\
+                    Math.isGoodQuad(cnt, 100):
                 resCnts.append(cnt)
 
         return resCnts
 
-    def findSquares_BruteForce(self, src, pos, type):
+    def findSquares_BruteForce(self, src, type):
         resCnts = []
         for i, channel in enumerate(cv2.split(src)):
             for thresh1 in range(0, 301, 100):
                 for thresh2 in range(100, 301, 100):
                     edge = cv2.Canny(channel, thresh1, thresh2)
 
-                    resCnts += self.findSquares(edge, pos, type)
+                    resCnts += self.findSquares(edge, type)
                     dilate = cv2.dilate(edge, None)
 
-                    cv2.imwrite(
-                        'variant/edge-%d-%d-%d.jpg' % (i, thresh1, thresh2),
-                        edge)
-                    cv2.imwrite(
-                        'variant/dilate-%d-%d-%d.jpg' % (i, thresh1, thresh2),
-                        dilate)
-                    resCnts += self.findSquares(dilate, pos, type)
+                    # cv2.imwrite(
+                    #     'variant/edge-%d-%d-%d.jpg' % (i, thresh1, thresh2),
+                    #     edge)
+                    # cv2.imwrite(
+                    #     'variant/dilate-%d-%d-%d.jpg' % (i, thresh1, thresh2),
+                    #     dilate)
+                    resCnts += self.findSquares(dilate, type)
         return resCnts
 
     def getUIContour(self, origin, pos):
-        cnts = self.findSquares_BruteForce(origin, pos, Rect.BUTTON)
-        rects = self.rectModule.getGoodRects(cnts)
+        pivot, crop = self.getCropImgByPos(origin, pos)
+        cnts = self.findSquares_BruteForce(crop, Rect.BUTTON)
+        rects = self.rectModule.getRects(cnts)
+        # restore position
+        rects = [(rect[0] + pivot[0], rect[1] + pivot[1], rect[2], rect[3])
+                 for rect in rects]
+        rects = self.rectModule.getGoodRects(rects)
+
         rect = self.rectModule.getRectHasPoint(rects, pos)
 
-        area = np.copy(origin)
-        for r in rects:
-            x, y, w, h = r
-            cv2.rectangle(area, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # area = np.copy(origin)
+        # for r in rects:
+        #     x, y, w, h = r
+        #     cv2.rectangle(area, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-        cv2.imshow('area', area)
-        cv2.waitKey(0)
+        # cv2.imshow('area', area)
+        # cv2.waitKey(0)
 
         return rect

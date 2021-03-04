@@ -2,9 +2,11 @@ import numpy as np
 import cv2 as cv
 
 
-def angle_cos(p0, p1, p2):
+def getAngle(p0, p1, p2):
     d1, d2 = (p0 - p1).astype('float'), (p2 - p1).astype('float')
-    return abs(np.dot(d1, d2) / np.sqrt(np.dot(d1, d1) * np.dot(d2, d2)))
+    cosAngle = np.dot(d1, d2) / (np.linalg.norm(d1) * np.linalg.norm(d2))
+    angle = np.arccos(cosAngle)
+    return np.degrees(angle)
 
 
 def find_squares_entity(bin):
@@ -20,11 +22,11 @@ def find_squares_entity(bin):
         ) == 4 and h > 20 and w > 30 and w < 300 and h < 300 and cv.isContourConvex(
                 cnt):
             cnt = cnt.reshape(-1, 2)
-            max_cos = np.max([
-                angle_cos(cnt[i], cnt[(i + 1) % 4], cnt[(i + 2) % 4])
+            maxAngle = np.max([
+                getAngle(cnt[i], cnt[(i + 1) % 4], cnt[(i + 2) % 4])
                 for i in range(4)
             ])
-            if max_cos < 0.3:
+            if maxAngle < 100:
                 squares.append(cnt)
 
     return squares
@@ -46,7 +48,7 @@ def find_squares(img):
 
 def main():
 
-    img = cv.imread('testImg/s5.jpg')
+    img = cv.imread('testImg/s7.jpg')
     squares = find_squares(img)
     cv.drawContours(img, squares, -1, (0, 255, 0), 3)
     cv.imshow('squares', img)
