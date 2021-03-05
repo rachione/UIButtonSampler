@@ -31,7 +31,7 @@ def find_squares_entity(bin):
     for oriCnt in contours:
         cnt_len = cv.arcLength(oriCnt, True)
         x, y, w, h = cv.boundingRect(oriCnt)
-        if h > 20 and w > 30 and w < 300 and h < 300:
+        if h > 30 and w > 50 and w < 300 and h < 300:
             for ratio in range(3, 10, 2):
                 cnt = cv.approxPolyDP(oriCnt, 0.01 * ratio * cnt_len, True)
                 if len(cnt) == 4 and cv.isContourConvex(cnt):
@@ -58,7 +58,7 @@ def find_squares(src):
 
                 edge = cv.Canny(img, thrs1, thrs2)
                 # bin = cv.dilate(edge, None)
-                # squares += find_squares_entity(bin)
+                squares += find_squares_entity(edge)
                 bin = cv.dilate(edge, None)
                 squares += find_squares_entity(bin)
 
@@ -71,7 +71,7 @@ def find_squares(src):
 
 def main():
 
-    img = cv.imread('testImg/s8.jpg')
+    img = cv.imread('testImg/s5.jpg')
     # img = img[500:1000, 600:900]
     squares = find_squares(img)
     cv.drawContours(img, squares, -1, (0, 255, 0), 3)

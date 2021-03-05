@@ -12,6 +12,7 @@ class Rect(Enum):
 
 
 class Math:
+
     @staticmethod
     def getAngle(p0, p1, p2):
         d1, d2 = (p0 - p1).astype('float'), (p2 - p1).astype('float')
@@ -30,6 +31,7 @@ class Math:
 
 
 class TrackbarDebug:
+
     def updateMin(self, x):
         self.min = x
 
@@ -66,6 +68,7 @@ class TrackbarDebug:
 
 
 class RectModule:
+
     def __init__(self):
         self.debug = TrackbarDebug()
 
@@ -73,7 +76,7 @@ class RectModule:
         x, y, w, h = rect
         return {
             Rect.WORD: (h > 15 and w > 5 and w < 150 and h < 150),
-            Rect.BUTTON: (h > 20 and w > 30 and w < 300 and h < 300),
+            Rect.BUTTON: (h > 30 and w > 50 and w < 300 and h < 300),
         }[type]
 
     def sort(self, rects):
@@ -135,6 +138,7 @@ class RectModule:
 
 
 class ImgProcess:
+
     def __init__(self):
         self.debug = TrackbarDebug()
         self.rectModule = RectModule()
@@ -210,8 +214,8 @@ class ImgProcess:
             pivotY = 0
         rect = pivotX, pivotY, rangeX, rangeY
         return  (pivotX, pivotY),\
-                (pos.x -pivotX,pos.y -pivotY),\
-                self.getCropImg(img, rect)
+                (pos.x - pivotX, pos.y - pivotY),\
+            self.getCropImg(img, rect)
 
     def findSquares(self, src, pos, type):
         resCnts = []
@@ -219,7 +223,7 @@ class ImgProcess:
         for oriCnt in cnts:
             rect = cv2.boundingRect(oriCnt)
             if self.rectModule.isGoodRange(rect, type) and\
-                self.rectModule.isRectHasPoint(rect, pos):
+                    self.rectModule.isRectHasPoint(rect, pos):
                 peri = cv2.arcLength(oriCnt, True)
                 # make different epsilon for approximation
                 for ratio in range(3, 10, 2):
@@ -235,7 +239,7 @@ class ImgProcess:
         kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
         sharpen = cv2.filter2D(src, -1, kernel)
         blurImg = cv2.GaussianBlur(src, (11, 11), 0)
-        return cv2.split(src) + [src, sharpen]
+        return [src] + [sharpen, blurImg] + cv2.split(src)
 
     # def findSquaresByThreshhold(self, src, pos, type):
     #     resCnts = []
@@ -253,8 +257,13 @@ class ImgProcess:
             for thresh1 in range(0, 301, 100):
                 for thresh2 in range(100, 301, 100):
                     edge = cv2.Canny(img, thresh1, thresh2)
+                    resCnts += self.findSquares(edge, pos, type)
                     dilate = cv2.dilate(edge, None)
                     resCnts += self.findSquares(dilate, pos, type)
+                    if len(resCnts) != 0:
+                        break
+                if len(resCnts) != 0:
+                    break
             if len(resCnts) != 0:
                 break
 
