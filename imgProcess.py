@@ -199,20 +199,28 @@ class ImgProcess:
 
     def getCropImgByPos(self, img, pos):
         rangeX = 600
-        rangeY = 500
-        rect = pos.x - rangeX // 2, pos.y - rangeY // 2, rangeX, rangeY
-        return  (rect[0], rect[1]),\
-                (rangeX // 2,rangeY // 2),\
+        rangeY = 600
+        pivotX = pos.x - rangeX // 2
+        pivotY = pos.y - rangeY // 2
+        if pivotX < 0:
+            rangeX += pivotX
+            pivotX = 0
+        if pivotY < 0:
+            rangeY += pivotY
+            pivotY = 0
+        rect = pivotX, pivotY, rangeX, rangeY
+        return  (pivotX, pivotY),\
+                (pos.x -pivotX,pos.y -pivotY),\
                 self.getCropImg(img, rect)
 
     def findSquares(self, src, pos, type):
-        # centerPos = src.shape[0] // 2, src.shape[1] // 2
         resCnts = []
         cnts, _ = cv2.findContours(src, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         for oriCnt in cnts:
             rect = cv2.boundingRect(oriCnt)
             if self.rectModule.isGoodRange(rect, type):
                 peri = cv2.arcLength(oriCnt, True)
+                # make different epsilon for approximation
                 for ratio in range(3, 10, 2):
                     cnt = cv2.approxPolyDP(oriCnt, 0.01 * ratio * peri, True)
                     if  len(cnt) == 4 and\
@@ -245,7 +253,6 @@ class ImgProcess:
             for thresh1 in range(0, 301, 100):
                 for thresh2 in range(0, 301, 100):
                     edge = cv2.Canny(img, thresh1, thresh2)
-                    # resCnts += self.findSquares(edge, pos, type)
                     dilate = cv2.dilate(edge, None)
                     resCnts += self.findSquares(dilate, pos, type)
             if len(resCnts) != 0:
@@ -254,11 +261,8 @@ class ImgProcess:
         return resCnts
 
     def getUIContour(self, origin, pos):
-        pivot, relativePos, crop = self.getCropImgByPos(origin, pos)
-        cnts = self.findSquaresByCanny(crop, relativePos, Rect.BUTTON)
-        # if len(cnts) == 0:
-        #     print('go to threshold')
-        #     cnts = self.findSquaresByThreshhold(crop, relativePos, Rect.BUTTON)
+        pivot, posInCrop, crop = self.getCropImgByPos(origin, pos)
+        cnts = self.findSquaresByCanny(crop, posInCrop, Rect.BUTTON)
         if len(cnts) == 0:
             print('no rect')
             return None

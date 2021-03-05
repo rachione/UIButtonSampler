@@ -50,7 +50,7 @@ def find_squares_entity(bin):
 def find_squares(src):
     kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
     sharpen = cv.filter2D(src, -1, kernel)
-    gray = cv.cvtColor(src, cv.COLOR_BGR2GRAY)
+
     blurImg = cv.GaussianBlur(src, (11, 11), 0)
     squares = []
     for img in [src, blurImg, sharpen]:
@@ -60,15 +60,16 @@ def find_squares(src):
                 bin = cv.Canny(img, thrs1, thrs2)
                 bin = cv.dilate(bin, None)
                 squares += find_squares_entity(bin)
+        # gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         # for thrs in range(0, 255, 26):
-        #     _, bin = cv.threshold(img, thrs, 255, cv.THRESH_BINARY)
+        #     _, bin = cv.threshold(gray, thrs, 255, cv.THRESH_BINARY)
         #     squares += find_squares_entity(bin)
     return squares
 
 
 def main():
 
-    img = cv.imread('testImg/s6.jpg')
+    img = cv.imread('testImg/s8.jpg')
     squares = find_squares(img)
     cv.drawContours(img, squares, -1, (0, 255, 0), 3)
     cv.imshow('squares', img)
