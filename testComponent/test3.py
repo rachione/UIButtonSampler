@@ -27,8 +27,7 @@ def find_contour(bin):
 
 def find_squares_entity(bin):
     squares = []
-    contours, _hierarchy = cv.findContours(bin, cv.RETR_LIST,
-                                           cv.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv.findContours(bin, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
     for oriCnt in contours:
         cnt_len = cv.arcLength(oriCnt, True)
         x, y, w, h = cv.boundingRect(oriCnt)
@@ -41,7 +40,7 @@ def find_squares_entity(bin):
                         getAngle(cnt[i], cnt[(i + 1) % 4], cnt[(i + 2) % 4])
                         for i in range(4)
                     ])
-                    if maxAngle < 100:
+                    if maxAngle < 120:
                         squares.append(cnt)
 
     return squares
@@ -53,13 +52,16 @@ def find_squares(src):
 
     blurImg = cv.GaussianBlur(src, (11, 11), 0)
     squares = []
-    for img in [src, blurImg, sharpen]:
+    for img in [src, sharpen] + cv.split(src):
         for thrs1 in range(0, 301, 100):
-            for thrs2 in range(0, 301, 100):
+            for thrs2 in range(100, 301, 100):
 
-                bin = cv.Canny(img, thrs1, thrs2)
-                bin = cv.dilate(bin, None)
+                edge = cv.Canny(img, thrs1, thrs2)
+                # bin = cv.dilate(edge, None)
+                # squares += find_squares_entity(bin)
+                bin = cv.dilate(edge, None)
                 squares += find_squares_entity(bin)
+
         # gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         # for thrs in range(0, 255, 26):
         #     _, bin = cv.threshold(gray, thrs, 255, cv.THRESH_BINARY)
@@ -70,6 +72,7 @@ def find_squares(src):
 def main():
 
     img = cv.imread('testImg/s8.jpg')
+    # img = img[500:1000, 600:900]
     squares = find_squares(img)
     cv.drawContours(img, squares, -1, (0, 255, 0), 3)
     cv.imshow('squares', img)

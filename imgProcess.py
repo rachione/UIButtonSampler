@@ -26,7 +26,7 @@ class Math:
             Math.getAngle(cnt[i], cnt[(i + 1) % 4], cnt[(i + 2) % 4])
             for i in range(4)
         ])
-        return maxAngle <= limitAngle
+        return maxAngle < limitAngle
 
 
 class TrackbarDebug:
@@ -218,15 +218,15 @@ class ImgProcess:
         cnts, _ = cv2.findContours(src, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         for oriCnt in cnts:
             rect = cv2.boundingRect(oriCnt)
-            if self.rectModule.isGoodRange(rect, type):
+            if self.rectModule.isGoodRange(rect, type) and\
+                self.rectModule.isRectHasPoint(rect, pos):
                 peri = cv2.arcLength(oriCnt, True)
                 # make different epsilon for approximation
                 for ratio in range(3, 10, 2):
                     cnt = cv2.approxPolyDP(oriCnt, 0.01 * ratio * peri, True)
                     if  len(cnt) == 4 and\
                             cv2.isContourConvex(cnt) and\
-                            self.rectModule.isRectHasPoint(rect, pos) and\
-                            Math.isGoodQuad(cnt, 100):
+                            Math.isGoodQuad(cnt, 120):
                         resCnts.append(cnt)
 
         return resCnts
@@ -235,23 +235,23 @@ class ImgProcess:
         kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
         sharpen = cv2.filter2D(src, -1, kernel)
         blurImg = cv2.GaussianBlur(src, (11, 11), 0)
-        return [src, blurImg, sharpen]
+        return cv2.split(src) + [src, sharpen]
 
-    def findSquaresByThreshhold(self, src, pos, type):
-        resCnts = []
-        for img in self.getVariantImgs(src):
-            for channel in cv2.split(img):
-                for thrs in range(0, 255, 26):
-                    _, bin = cv2.threshold(channel, thrs, 255,
-                                           cv2.THRESH_BINARY)
-                    resCnts += self.findSquares(bin, pos, type)
-        return resCnts
+    # def findSquaresByThreshhold(self, src, pos, type):
+    #     resCnts = []
+    #     for img in self.getVariantImgs(src):
+    #         for channel in cv2.split(img):
+    #             for thrs in range(0, 255, 26):
+    #                 _, bin = cv2.threshold(channel, thrs, 255,
+    #                                        cv2.THRESH_BINARY)
+    #                 resCnts += self.findSquares(bin, pos, type)
+    #     return resCnts
 
     def findSquaresByCanny(self, src, pos, type):
         resCnts = []
         for img in self.getVariantImgs(src):
             for thresh1 in range(0, 301, 100):
-                for thresh2 in range(0, 301, 100):
+                for thresh2 in range(100, 301, 100):
                     edge = cv2.Canny(img, thresh1, thresh2)
                     dilate = cv2.dilate(edge, None)
                     resCnts += self.findSquares(dilate, pos, type)
