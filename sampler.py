@@ -17,7 +17,6 @@ VK = {
 
 
 class Sampler:
-
     def __init__(self):
         self.imgProcess = ImgProcess()
         self.count = 0
@@ -36,6 +35,8 @@ class Sampler:
         origin = self.getScreenShot()
         pos = self.getCursorPos()
         rect = self.imgProcess.getUIContour(origin, pos)
+        if rect == None:
+            return
         sample = self.imgProcess.getCropImg(origin, rect)
         self.imgProcess.imwrite(sample)
         self.count += 1
@@ -43,7 +44,6 @@ class Sampler:
 
 
 class KeyRecorder:
-
     def __init__(self):
         self.key = VK['VK_LBUTTON']
         self.sampler = Sampler()

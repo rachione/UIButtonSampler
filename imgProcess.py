@@ -12,7 +12,6 @@ class Rect(Enum):
 
 
 class Math:
-
     @staticmethod
     def getAngle(p0, p1, p2):
         d1, d2 = (p0 - p1).astype('float'), (p2 - p1).astype('float')
@@ -31,7 +30,6 @@ class Math:
 
 
 class TrackbarDebug:
-
     def updateMin(self, x):
         self.min = x
 
@@ -68,7 +66,6 @@ class TrackbarDebug:
 
 
 class RectModule:
-
     def __init__(self):
         self.debug = TrackbarDebug()
 
@@ -123,8 +120,8 @@ class RectModule:
 
     def isRectHasPoint(self, rect, pos):
         x, y, w, h = rect
-        return (pos.x >= x and pos.x <= x + w and pos.y >= y
-                and pos.y <= y + h)
+        posX, posY = pos
+        return (posX >= x and posX <= x + w and posY >= y and posY <= y + h)
 
     def getRectHasPoint(self, rects, pos):
         bestRect = rects[0]
@@ -138,7 +135,6 @@ class RectModule:
 
 
 class ImgProcess:
-
     def __init__(self):
         self.debug = TrackbarDebug()
         self.rectModule = RectModule()
@@ -202,47 +198,71 @@ class ImgProcess:
         return img[y:y + h, x:x + w]
 
     def getCropImgByPos(self, img, pos):
-        range = 300
-        rect = pos.x - range // 2, pos.y - range // 2, range, range
-        return (rect[0], rect[1]), self.getCropImg(img, rect)
+        rangeX = 600
+        rangeY = 500
+        rect = pos.x - rangeX // 2, pos.y - rangeY // 2, rangeX, rangeY
+        return  (rect[0], rect[1]),\
+                (rangeX // 2,rangeY // 2),\
+                self.getCropImg(img, rect)
 
-    def findSquares(self, src, type):
+    def findSquares(self, src, pos, type):
+        # centerPos = src.shape[0] // 2, src.shape[1] // 2
         resCnts = []
         cnts, _ = cv2.findContours(src, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        for cnt in cnts:
-            peri = cv2.arcLength(cnt, True)
-            cnt = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-            rect = cv2.boundingRect(cnt)
-            if  len(cnt) == 4 and\
-                    cv2.isContourConvex(cnt) and\
-                    self.rectModule.isGoodRange(rect, type) and\
-                    Math.isGoodQuad(cnt, 100):
-                resCnts.append(cnt)
+        for oriCnt in cnts:
+            rect = cv2.boundingRect(oriCnt)
+            if self.rectModule.isGoodRange(rect, type):
+                peri = cv2.arcLength(oriCnt, True)
+                for ratio in range(3, 10, 2):
+                    cnt = cv2.approxPolyDP(oriCnt, 0.01 * ratio * peri, True)
+                    if  len(cnt) == 4 and\
+                            cv2.isContourConvex(cnt) and\
+                            self.rectModule.isRectHasPoint(rect, pos) and\
+                            Math.isGoodQuad(cnt, 100):
+                        resCnts.append(cnt)
 
         return resCnts
 
-    def findSquares_BruteForce(self, src, type):
+    def getVariantImgs(self, src):
+        kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+        sharpen = cv2.filter2D(src, -1, kernel)
+        blurImg = cv2.GaussianBlur(src, (11, 11), 0)
+        return [src, blurImg, sharpen]
+
+    def findSquaresByThreshhold(self, src, pos, type):
         resCnts = []
-        for i, channel in enumerate(cv2.split(src)):
+        for img in self.getVariantImgs(src):
+            for channel in cv2.split(img):
+                for thrs in range(0, 255, 26):
+                    _, bin = cv2.threshold(channel, thrs, 255,
+                                           cv2.THRESH_BINARY)
+                    resCnts += self.findSquares(bin, pos, type)
+        return resCnts
+
+    def findSquaresByCanny(self, src, pos, type):
+        resCnts = []
+        for img in self.getVariantImgs(src):
             for thresh1 in range(0, 301, 100):
-                for thresh2 in range(100, 301, 100):
-                    edge = cv2.Canny(channel, thresh1, thresh2)
-
-                    resCnts += self.findSquares(edge, type)
+                for thresh2 in range(0, 301, 100):
+                    edge = cv2.Canny(img, thresh1, thresh2)
+                    # resCnts += self.findSquares(edge, pos, type)
                     dilate = cv2.dilate(edge, None)
+                    resCnts += self.findSquares(dilate, pos, type)
+            if len(resCnts) != 0:
+                break
 
-                    # cv2.imwrite(
-                    #     'variant/edge-%d-%d-%d.jpg' % (i, thresh1, thresh2),
-                    #     edge)
-                    # cv2.imwrite(
-                    #     'variant/dilate-%d-%d-%d.jpg' % (i, thresh1, thresh2),
-                    #     dilate)
-                    resCnts += self.findSquares(dilate, type)
         return resCnts
 
     def getUIContour(self, origin, pos):
-        pivot, crop = self.getCropImgByPos(origin, pos)
-        cnts = self.findSquares_BruteForce(crop, Rect.BUTTON)
+        pivot, relativePos, crop = self.getCropImgByPos(origin, pos)
+        cnts = self.findSquaresByCanny(crop, relativePos, Rect.BUTTON)
+        # if len(cnts) == 0:
+        #     print('go to threshold')
+        #     cnts = self.findSquaresByThreshhold(crop, relativePos, Rect.BUTTON)
+        if len(cnts) == 0:
+            print('no rect')
+            return None
+
         rects = self.rectModule.getRects(cnts)
         # restore position
         rects = [(rect[0] + pivot[0], rect[1] + pivot[1], rect[2], rect[3])
@@ -251,12 +271,12 @@ class ImgProcess:
 
         rect = self.rectModule.getRectHasPoint(rects, pos)
 
-        # area = np.copy(origin)
-        # for r in rects:
-        #     x, y, w, h = r
-        #     cv2.rectangle(area, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        area = np.copy(origin)
+        for r in rects:
+            x, y, w, h = r
+            cv2.rectangle(area, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-        # cv2.imshow('area', area)
-        # cv2.waitKey(0)
+        cv2.imshow('area', area)
+        cv2.waitKey(0)
 
         return rect
