@@ -1,3 +1,4 @@
+# UIButtonSampler
 ## About
-It can crop buttons from the interface using OpenCV.
+This tool detect and crop buttons from the interface using OpenCV.
 
